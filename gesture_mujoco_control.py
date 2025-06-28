@@ -44,7 +44,8 @@ def gesture_to_controls(gid):
 
 mj_model = MjModel.from_xml_path("gesture_arm.xml")
 mj_data = MjData(mj_model)
-
+shoulder_act_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, "shoulder")
+elbow_act_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, "elbow")
 with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
     cap = cv2.VideoCapture(0)
     while viewer.is_running():
@@ -61,10 +62,14 @@ with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
                 pred = model(torch.from_numpy(norm).float())
                 gid = torch.argmax(pred, dim=1).item()
                 mp_drawing.draw_landmarks(frame, lm, mp_hands.HAND_CONNECTIONS)
-        ctrl_vals = gesture_to_controls(gid) if gid is not None else [0,0]
-        mj_data.ctrl[mj_model.actuator("shoulder").id] = ctrl_vals[0]
-        mj_data.ctrl[mj_model.actuator("elbow").id] = ctrl_vals[1]
+        # ctrl_vals = gesture_to_controls(gid) if gid is not None else [0,0]
+        # mj_data.ctrl[mj_model.actuator("shoulder").id] = ctrl_vals[0]
+        # mj_data.ctrl[mj_model.actuator("elbow").id] = ctrl_vals[1]
+        ctrl_vals = gesture_to_controls(gid) if gid is not None else [0, 0]
+        mj_data.ctrl[shoulder_act_id] = ctrl_vals[0]
+        mj_data.ctrl[elbow_act_id] = ctrl_vals[1]
         mujoco.mj_step(mj_model, mj_data)
+        viewer.sync()
         viewer.label = f"Gesture: {gid}"
         cv2.imshow("Webcam", frame)
         if cv2.waitKey(1)&0xFF==ord('q'):
