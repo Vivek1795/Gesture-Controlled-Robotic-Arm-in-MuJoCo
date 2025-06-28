@@ -46,6 +46,15 @@ mj_model = MjModel.from_xml_path("gesture_arm.xml")
 mj_data = MjData(mj_model)
 shoulder_act_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, "shoulder")
 elbow_act_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, "elbow")
+shoulder_jnt_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, "shoulder")
+elbow_jnt_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, "elbow")
+
+# Allowable ranges (radians) for the joints
+ANGLE_LIMITS = {
+    "shoulder": (-np.pi / 2, np.pi / 2),
+    "elbow": (-np.pi / 2, np.pi / 2),
+}
+
 with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
     cap = cv2.VideoCapture(0)
     while viewer.is_running():
@@ -69,6 +78,21 @@ with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         mj_data.ctrl[shoulder_act_id] = ctrl_vals[0]
         mj_data.ctrl[elbow_act_id] = ctrl_vals[1]
         mujoco.mj_step(mj_model, mj_data)
+        
+        # Clamp joint positions within allowed limits
+        sh_idx = mj_model.jnt_qposadr[shoulder_jnt_id]
+        el_idx = mj_model.jnt_qposadr[elbow_jnt_id]
+        before_sh = mj_data.qpos[sh_idx]
+        before_el = mj_data.qpos[el_idx]
+        mj_data.qpos[sh_idx] = np.clip(mj_data.qpos[sh_idx], *ANGLE_LIMITS["shoulder"])
+        mj_data.qpos[el_idx] = np.clip(mj_data.qpos[el_idx], *ANGLE_LIMITS["elbow"])
+
+        # Zero velocity if clamped to avoid drifting past limit
+        if mj_data.qpos[sh_idx] != before_sh:
+            mj_data.qvel[mj_model.jnt_dofadr[shoulder_jnt_id]] = 0
+        if mj_data.qpos[el_idx] != before_el:
+            mj_data.qvel[mj_model.jnt_dofadr[elbow_jnt_id]] = 0
+        
         viewer.sync()
         viewer.label = f"Gesture: {gid}"
         cv2.imshow("Webcam", frame)
